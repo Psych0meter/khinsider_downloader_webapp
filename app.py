@@ -24,8 +24,7 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 
 # --- UPDATED SANITIZATION ---
 def clean_album_title(title):
-    """Specific logic to strip KHInsider suffixes like 'MP3 Soundtracks for FREE!'"""
-    # Remove the common KHInsider suffix
+    """Specific logic to strip KHInsider suffixes."""
     title = re.sub(r'_?MP3_Soundtracks_for_FREE.*$', '', title, flags=re.IGNORECASE)
     title = re.sub(r'\s+MP3\s+Soundtracks\s+for\s+FREE.*$', '', title, flags=re.IGNORECASE)
     return title.strip()
@@ -33,16 +32,10 @@ def clean_album_title(title):
 def sanitize_filename(name, is_album=False):
     """Decodes URL characters, removes illegal FS chars, and replaces spaces."""
     name = unquote(name)
-    
-    # If this is an album title, strip the "MP3 Soundtracks..." suffix first
     if is_album:
         name = clean_album_title(name)
-        
-    # Remove characters that cause issues on Windows/Linux filesystems
     name = re.sub(r'[\\/*?:"<>|]', "", name)
-    # Replace spaces with underscores
     name = name.replace(" ", "_")
-    # Remove trailing/leading underscores and double underscores
     name = re.sub(r'__+', '_', name).strip('_')
     return name
 
@@ -85,7 +78,6 @@ def download():
     def generate():
         headers = {"User-Agent": USER_AGENT}
         try:
-            # Permission Check
             if not os.access(DOWNLOAD_DIR, os.W_OK):
                 yield f"data: {json.dumps({'line': 'Error: Permission denied on /downloads'})}\n\n"
                 return
@@ -95,9 +87,7 @@ def download():
             res = requests.get(album_url, headers=headers)
             soup = BeautifulSoup(res.text, 'html.parser')
             
-            # GET AND CLEAN ALBUM TITLE
             raw_title = soup.find("title").text.replace(" - Download", "").strip()
-            # Set is_album=True to trigger the suffix stripping
             album_title = sanitize_filename(raw_title, is_album=True)
             
             song_links = []
@@ -118,8 +108,6 @@ def download():
                 if not audio_links: continue
 
                 target_url = next((l for l in audio_links if l.endswith(preferred_ext)), audio_links[0])
-                
-                # CLEAN FILENAME (Decodes %20 and replaces spaces)
                 file_name = sanitize_filename(os.path.basename(target_url))
                 file_path = os.path.join(album_path, file_name)
 
@@ -138,7 +126,17 @@ def download():
             logger.error(traceback.format_exc())
             yield f"data: {json.dumps({'line': f'Error: {str(e)}'})}\n\n"
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    # CRITICAL: Headers to prevent Docker/Proxy buffering
+    return Response(
+        stream_with_context(generate()), 
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+            'Transfer-Encoding': 'chunked'
+        }
+    )
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=False)
