@@ -2,9 +2,10 @@ name: Docker Build and Push
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:
   build:
@@ -32,6 +33,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # This will automatically tag the image as 'main' or 'dev' 
+          # based on which branch you pushed to.
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
