@@ -2,6 +2,8 @@
 
 A lightweight, self-hosted web application to search and batch-download video game soundtracks from KHInsider directly to local storage or NAS. This tool provides a modern interface for managing music archives with support for lossless formats.
 
+![alt text](images/01_main_page.png)
+
 ### Core Functionality
 
 * **Search Engine**: Integrated search to find albums by title without leaving the application.
