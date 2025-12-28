@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>KHInsider Search & Download</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-8 font-sans">
+
+<div x-data="app()" class="max-w-3xl mx-auto">
+    <div class="flex justify-between items-end mb-8">
+        <div>
+            <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">KHInsider Web</h1>
+            <p class="text-slate-500 mt-2">Search and download soundtracks directly to your NAS</p>
+        </div>
+        <div class="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+            <button @click="format = '.mp3'" :class="format === '.mp3' ? 'bg-blue-600 shadow-lg' : 'hover:bg-slate-700'" class="px-4 py-1 rounded-md transition-all font-bold text-xs">MP3</button>
+            <button @click="format = '.flac'" :class="format === '.flac' ? 'bg-blue-600 shadow-lg' : 'hover:bg-slate-700'" class="px-4 py-1 rounded-md transition-all font-bold text-xs">FLAC</button>
+        </div>
+    </div>
+
+    <div class="flex gap-4 mb-8 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+        <input type="text" x-model="query" @keyup.enter="search" placeholder="Search album name or paste URL..." 
+               class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+        <button @click="search" :disabled="loading" class="bg-blue-600 px-6 py-2 rounded-lg hover:bg-blue-500 font-bold disabled:opacity-50 transition-colors">
+            <span x-show="!loading">Search</span>
+            <span x-show="loading" class="animate-pulse">Searching...</span>
+        </button>
+    </div>
+
+    <template x-if="results.length > 0">
+        <div class="bg-slate-800 rounded-xl overflow-hidden mb-8 border border-slate-700">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-700/50 text-slate-400 text-sm">
+                    <tr>
+                        <th class="p-4">Album Name</th>
+                        <th class="p-4 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700">
+                    <template x-for="res in results">
+                        <tr class="hover:bg-slate-700/30 transition-colors">
+                            <td class="p-4">
+                                <div class="font-medium" x-text="res.album"></div>
+                                <a :href="res.url" target="_blank" class="text-[10px] text-blue-400 hover:underline flex items-center gap-1 mt-1">
+                                    🔗 Check on KHInsider
+                                </a>
+                            </td>
+                            <td class="p-4 text-right">
+                                <button @click="startDownload(res.url)" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-4 rounded-lg">
+                                    Download <span x-text="format.toUpperCase().replace('.','')"></span>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </template>
+
+    <div x-show="loadingDownload || logs.length > 0" class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-2xl">
+        <div class="mb-6">
+            <div class="flex justify-between mb-2">
+                <span x-text="status" class="text-blue-400 font-bold"></span>
+                <span x-text="progress + '%'" class="text-slate-400 font-mono"></span>
+            </div>
+            <div class="w-full bg-slate-900 h-4 rounded-full overflow-hidden border border-slate-700">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-400 h-full transition-all duration-500 ease-out" :style="`width: ${progress}%`"></div>
+            </div>
+        </div>
+        <div id="logBox" class="h-64 overflow-y-auto bg-slate-950 rounded-lg p-4 font-mono text-[11px] leading-relaxed text-emerald-500 border border-slate-800">
+            <template x-for="log in logs">
+                <div class="opacity-80 border-b border-white/5 pb-1 mb-1" x-text="log"></div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function app() {
+    return {
+        query: '',
+        format: '.flac',
+        loading: false,
+        loadingDownload: false,
+        results: [],
+        logs: [],
+        progress: 0,
+        status: 'Ready',
+        
+        async search() {
+            if (this.query.startsWith('http')) return this.startDownload(this.query);
+            this.loading = true;
+            try {
+                const res = await fetch('/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: this.query})
+                });
+                const data = await res.json();
+                this.results = data.results || [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async startDownload(url) {
+            this.loadingDownload = true;
+            this.logs = [];
+            this.progress = 0;
+            this.status = 'Initializing...';
+            
+            const response = await fetch('/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url, format: this.format})
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const {value, done} = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                chunk.split('\n\n').filter(Boolean).forEach(line => {
+                    try {
+                        const data = JSON.parse(line.replace('data: ', ''));
+                        this.logs.push(data.line);
+                        if (data.progress !== undefined) this.progress = data.progress;
+                        this.status = data.line;
+                        this.$nextTick(() => { const b = document.getElementById('logBox'); b.scrollTop = b.scrollHeight; });
+                    } catch(e) {}
+                });
+            }
+            this.loadingDownload = false;
+        }
+    }
+}
+</script>
+</body>
+</html>
