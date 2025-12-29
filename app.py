@@ -8,6 +8,8 @@ import requests
 from urllib.parse import unquote
 from bs4 import BeautifulSoup
 from flask import Flask, render_template, request, Response, stream_with_context
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- LOGGING CONFIGURATION ---
 logging.basicConfig(
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-DOWNLOAD_DIR = "/downloads"
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 # --- UPDATED SANITIZATION ---
