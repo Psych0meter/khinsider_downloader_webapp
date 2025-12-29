@@ -32,12 +32,18 @@
 
     <div class="flex flex-col md:flex-row gap-4 mb-6 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
         <input type="text" x-model="query" @keyup.enter="search" :disabled="loadingDownload"
-               placeholder="Search album name..." 
+               placeholder="Search album name or paste album URL..." 
                class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50">
+        
         <button @click="search" :disabled="loading || loadingDownload" 
-                class="bg-blue-600 px-6 py-2 rounded-lg hover:bg-blue-500 font-bold disabled:opacity-50 transition-colors">
-            <span x-show="!loading">Search</span>
+                :class="isUrl ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'"
+                class="px-6 py-2 rounded-lg font-bold disabled:opacity-50 transition-all min-w-[140px]">
+            
             <span x-show="loading" class="animate-pulse">Searching...</span>
+            
+            <template x-if="!loading">
+                <span x-text="isUrl ? 'Download Link' : 'Search Album'"></span>
+            </template>
         </button>
     </div>
 
@@ -107,18 +113,35 @@ function app() {
         logs: [],
         progress: 0,
         status: 'Ready',
+
+        // Helper to check if input is a URL
+        get isUrl() {
+            return this.query.trim().startsWith('http://') || this.query.trim().startsWith('https://');
+        },
         
         async search() {
-            if (!this.query.trim() || this.loadingDownload) return;
+            const input = this.query.trim();
+            if (!input || this.loadingDownload) return;
+
+            if (this.isUrl) {
+                this.status = "Direct URL detected...";
+                return this.startDownload(input);
+            }
+
             this.loading = true;
             try {
                 const res = await fetch('/search', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query: this.query})
+                    body: JSON.stringify({query: input})
                 });
                 const data = await res.json();
                 this.results = data.results || [];
+                if (this.results.length === 0) {
+                    this.status = "No results found.";
+                }
+            } catch (err) {
+                this.status = "Search failed.";
             } finally {
                 this.loading = false;
             }
@@ -168,9 +191,11 @@ function app() {
                 }
             } catch (err) {
                 this.logs.push("Error: " + err.message);
+                this.status = "Download failed.";
             } finally {
                 this.loadingDownload = false;
                 this.activeUrl = null;
+                this.query = ''; 
             }
         }
     }
