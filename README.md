@@ -1,3 +1,5 @@
+MOVED TO : https://github.com/Psych0meter/music_downloader_webapp
+
 # KHInsider Web Downloader
 
 A lightweight, self-hosted web application to search and batch-download video game soundtracks from KHInsider directly to local storage or NAS. This tool provides a modern interface for managing music archives with support for lossless formats.
